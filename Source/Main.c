@@ -1,3 +1,11 @@
+/*
+
+TODO:
++ fix rifle
++ for complex models, use glTF instead of obj
+
+*/
+
 #include "Base.c"
 #include "RayLib.c"
 
