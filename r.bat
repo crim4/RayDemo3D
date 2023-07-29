@@ -1,0 +1,1 @@
+@call "b.bat" && call "Build\Demo.exe"
