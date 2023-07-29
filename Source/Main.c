@@ -5,7 +5,7 @@
 #define SCREEN_H ((float)650)
 #define TITLE ((char const*)"Demo")
 
-#define BACKGROUND_COLOR ((Color){25, 25, 25, 255})
+#define BACKGROUND_COLOR ((Color){15, 15, 15, 255})
 
 #define FONT_RESOLUTION ((int)128)
 #define FONT_SPACING ((float)1)

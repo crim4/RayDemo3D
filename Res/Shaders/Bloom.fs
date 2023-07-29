@@ -12,8 +12,8 @@ uniform vec4 colDiffuse;
 out vec4 finalColor;
 
 const vec2 size = vec2(1200, 650);  // Framebuffer size
-const float samples = 5.0;          // Pixels per axis; higher = bigger glow, worse performance
-const float quality = 2.5;          // Defines size factor: Lower = smaller glow, better quality
+const float samples = 6.5;          // Pixels per axis; higher = bigger glow, worse performance
+const float quality = 6.5;          // Defines size factor: Lower = smaller glow, better quality
 
 void main()
 {
@@ -26,12 +26,8 @@ void main()
     const int range = 2;            // should be = (samples - 1)/2;
 
     for (int x = -range; x <= range; x++)
-    {
         for (int y = -range; y <= range; y++)
-        {
             sum += texture(texture0, fragTexCoord + vec2(x, y)*sizeFactor);
-        }
-    }
 
     // Calculate final fragment color
     finalColor = ((sum/(samples*samples)) + source)*colDiffuse;
