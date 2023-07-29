@@ -5,7 +5,7 @@
 #define SCREEN_H ((float)650)
 #define TITLE ((char const*)"Demo")
 
-#define BACKGROUND_COLOR ((Color){30, 30, 30, 255})
+#define BACKGROUND_COLOR ((Color){25, 25, 25, 255})
 
 #define FONT_RESOLUTION ((int)128)
 #define FONT_SPACING ((float)1)
@@ -39,6 +39,8 @@ typedef struct {
 // context for the ctx
 typedef struct {
     Font font;
+    RenderTexture2D screen_shader_target;
+    Shader shader;
 
     weapons_t weapons;
     // index to ctx_t.weapons
@@ -294,13 +296,33 @@ void ctx_draw_ui(ctx_t* ctx) {
 void ctx_internal_update(ctx_t* ctx) {
     UpdateCamera(&ctx->camera, CAMERA_ORBITAL);
 
-    BeginDrawing();
+    ctx_update(ctx);
+
+    BeginTextureMode(ctx->screen_shader_target);
         clear_bg();
-        ctx_update(ctx);
 
         BeginMode3D(ctx->camera);
             ctx_drawing_update(ctx);
         EndMode3D();
+    EndTextureMode();
+
+    BeginDrawing();
+        clear_bg();
+
+        BeginShaderMode(ctx->shader);
+            DrawTextureRec(
+                ctx->screen_shader_target.texture,
+                rect(
+                    vec2(0, 0),
+                    vec2(
+                        -ctx->screen_shader_target.texture.width,
+                        -ctx->screen_shader_target.texture.height
+                    )
+                ),
+                vec2(0, 0),
+                WHITE
+            );
+        EndShaderMode();
 
         ctx_draw_ui(ctx);
     EndDrawing();
@@ -367,6 +389,9 @@ void init_ctx(ctx_t* ctx) {
     ctx->font = LoadFontEx("Res/IBM3270.ttf", FONT_RESOLUTION, NULL, 0);
     SetTextureFilter(ctx->font.texture, TEXTURE_FILTER_BILINEAR);
 
+    ctx->screen_shader_target = LoadRenderTexture(SCREEN_W, SCREEN_H);
+    ctx->shader = LoadShader(NULL, "Res/Shaders/Bloom.fs");
+
     init_ctx_weapons(ctx);
     ctx->selected_weapon = GetRandomValue(0, WEAPONS_COUNT - 1);
 
@@ -381,6 +406,8 @@ void init_ctx(ctx_t* ctx) {
 
 void deinit_ctx(ctx_t* ctx) {
     UnloadFont(ctx->font);
+    UnloadRenderTexture(ctx->screen_shader_target);
+    UnloadShader(ctx->shader);
     deinit_ctx_weapons(ctx);
 
     CloseWindow();
