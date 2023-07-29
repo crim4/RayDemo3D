@@ -1,0 +1,11 @@
+Model Information:
+* title:	Stylized-Dart-Sniper (Sydney Sleeper Remake)
+* source:	https://sketchfab.com/3d-models/stylized-dart-sniper-sydney-sleeper-remake-fd19033428694bb5a1999754635f2e4d
+* author:	Monarch (https://sketchfab.com/blueprinter)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Stylized-Dart-Sniper (Sydney Sleeper Remake)" (https://sketchfab.com/3d-models/stylized-dart-sniper-sydney-sleeper-remake-fd19033428694bb5a1999754635f2e4d) by Monarch (https://sketchfab.com/blueprinter) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

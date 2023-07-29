@@ -1,0 +1,11 @@
+Model Information:
+* title:	Cartoon Rifle
+* source:	https://sketchfab.com/3d-models/cartoon-rifle-0750b5d2ad414d089ce53da7105f0e0d
+* author:	zebra_pozer (https://sketchfab.com/zebra_pozer)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Cartoon Rifle" (https://sketchfab.com/3d-models/cartoon-rifle-0750b5d2ad414d089ce53da7105f0e0d) by zebra_pozer (https://sketchfab.com/zebra_pozer) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

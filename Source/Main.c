@@ -32,7 +32,7 @@ TODO:
 #define UI_DEBUG_FONT_SPACING ((float)5)
 #define UI_DEBUG_TEXT_MAX_LENGTH ((int)40)
 
-#define WEAPONS_COUNT ((uint8_t)2)
+#define WEAPONS_COUNT ((uint8_t)4)
 #define WEAPON_SWITCH_DIRECTION_NEXT ((int8_t)+1)
 #define WEAPON_SWITCH_DIRECTION_PREVIOUS ((int8_t)-1)
 #define WEAPON_INFO_FONT_SIZE ((float)(UI_DEBUG_FONT_SIZE * 1.4))
@@ -343,6 +343,21 @@ void ctx_loop(ctx_t* ctx) {
     }
 }
 
+void init_ctx_weapon_no_texture(
+    ctx_t* ctx,
+    uint8_t weapon_index,
+    char const* model_path,
+    char const* name,
+    float scale
+) {
+    ctx->weapons.models[weapon_index] = LoadModel(model_path);
+    // setting the model's texture
+
+    // setting miscs
+    ctx->weapons.names[weapon_index] = name;
+    ctx->weapons.scales[weapon_index] = scale;
+}
+
 void init_ctx_weapon(
     ctx_t* ctx,
     uint8_t weapon_index,
@@ -351,16 +366,12 @@ void init_ctx_weapon(
     char const* name,
     float scale
 ) {
-    // loading texture
-    Texture2D const weapon_texture = LoadTexture(texture_path);
     // loading model
-    ctx->weapons.models[weapon_index] = LoadModel(model_path);
-    // setting the model's texture
+    init_ctx_weapon_no_texture(ctx, weapon_index, model_path, name, scale);
+    
+    // loading texture + setting texture
+    Texture2D const weapon_texture = LoadTexture(texture_path);
     ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = weapon_texture;
-
-    // setting miscs
-    ctx->weapons.names[weapon_index] = name;
-    ctx->weapons.scales[weapon_index] = scale;
 }
 
 void deinit_ctx_weapon(ctx_t* ctx, uint8_t weapon_index) {
@@ -383,6 +394,18 @@ void init_ctx_weapons(ctx_t* ctx) {
         "Res/MultiPistol/BaseColor.png", "Res/MultiPistol/Model.obj",
         "MULTI PISTOL", 2
     );
+    init_ctx_weapon(
+        ctx, 2,
+        "Res/Rifle/BaseColor0.png",
+        "Res/Rifle/Model.obj",
+        "RIFLE", 0.7
+    );
+    init_ctx_weapon(
+        ctx, 3,
+        "Res/Sniper/BaseColor.png",
+        "Res/Sniper/Model.obj",
+        "SNIPER", 0.1
+    );
 }
 
 void deinit_ctx_weapons(ctx_t* ctx) {
@@ -393,6 +416,7 @@ void deinit_ctx_weapons(ctx_t* ctx) {
 void init_ctx(ctx_t* ctx) {
     InitWindow(SCREEN_W, SCREEN_H, TITLE);
     SetExitKey(KEY_NULL);
+    SetRandomSeed(GetTime() * 100);
 
     ctx->font = LoadFontEx("Res/IBM3270.ttf", FONT_RESOLUTION, NULL, 0);
     SetTextureFilter(ctx->font.texture, TEXTURE_FILTER_BILINEAR);
