@@ -1,6 +1,5 @@
 #include "Base.c"
 #include "RayLib.c"
-#include <stdio.h>
 
 #define SCREEN_W ((float)1200)
 #define SCREEN_H ((float)650)
@@ -12,23 +11,24 @@
 #define FONT_SPACING ((float)1)
 
 #define ZOOM_STEP ((float)0.08)
-#define ZOOM_IN_STEP_FACTOR ((float)-1)
-#define ZOOM_OUT_STEP_FACTOR ((float)+1)
-#define ZOOM_STOP_STEP_FACTOR ((float)0)
-#define ZOOM_SMOOTH_STEP ((float)0.0022)
+#define ZOOM_IN_TARGET ((float)-1)
+#define ZOOM_OUT_TARGET ((float)+1)
+#define ZOOM_STOP_TARGET ((float)0)
+#define ZOOM_SMOOTH_STEP ((float)0.0023)
 #define ZOOM_MAX ((float)110)
 #define ZOOM_MIN ((float)10)
+#define ZOOM_DELTATIME_FACTOR ((float)946)
 
 #define UI_EDGE_OFFSET ((float)40)
 #define UI_DEBUG_FONT_SIZE ((float)25)
 #define UI_DEBUG_FONT_SPACING ((float)5)
 #define UI_DEBUG_TEXT_MAX_LENGTH ((int)40)
 
-#define WEAPONS_COUNT ((uint8_t)3)
+#define WEAPONS_COUNT ((uint8_t)2)
 #define WEAPON_SWITCH_DIRECTION_NEXT ((int8_t)+1)
 #define WEAPON_SWITCH_DIRECTION_PREVIOUS ((int8_t)-1)
-#define ORIGINAL_WEAPON_INFO_TEXT_ALPHA ((float)255)
-#define WEAPON_INFO_TEXT_FADING_STEP ((float)0.002)
+#define WEAPON_INFO_FONT_SIZE ((float)(UI_DEBUG_FONT_SIZE * 1.4))
+#define WEAPON_NAME_COLOR ((Color){200, 120, 65, 255})
 
 typedef struct {
     Model models[WEAPONS_COUNT];
@@ -36,7 +36,7 @@ typedef struct {
     char const* names[WEAPONS_COUNT];
 } weapons_t;
 
-// context for the ctxlication
+// context for the ctx
 typedef struct {
     Font font;
 
@@ -44,11 +44,7 @@ typedef struct {
     // index to ctx_t.weapons
     uint8_t selected_weapon;
 
-    float weapon_info_text_fading_step;
-    float weapon_info_text_alpha;
-
     Camera3D camera;
-    float zoom_state;
 } ctx_t;
 
 void listen_for_exit(ctx_t* ctx);
@@ -80,17 +76,17 @@ bool is_fovy_in_bounds(float fovy) {
     return IS_IN_INCLUSIVE_RANGE(fovy, 10, 100);
 }
 
-void update_camera_from_zoom(float* fovy, float step_factor) {
-    float const r = *fovy + ZOOM_STEP * step_factor;
+float delta_time() {
+    return GetFrameTime();
+}
+
+void update_camera_from_zoom(float* fovy, float zoom_state) {
+    float const r = *fovy + ZOOM_STEP * delta_time() * ZOOM_DELTATIME_FACTOR * zoom_state;
 
     if (!is_fovy_in_bounds(r))
         return;
 
     *fovy = r;
-}
-
-void ctx_zoom_smoothly(ctx_t* ctx, float step_factor) {
-    ctx->zoom_state = Lerp(ctx->zoom_state, step_factor, ZOOM_SMOOTH_STEP);
 }
 
 void draw_test_cube() {
@@ -146,15 +142,25 @@ void ctx_draw_current_weapon(ctx_t* ctx) {
     );
 }
 
-void ctx_handle_zoom(ctx_t* ctx) {
-    if (is_input_zoom_in())
-        ctx_zoom_smoothly(ctx, ZOOM_IN_STEP_FACTOR);
-    else if (is_input_zoom_out())
-        ctx_zoom_smoothly(ctx, ZOOM_OUT_STEP_FACTOR);
-    else
-        ctx_zoom_smoothly(ctx, ZOOM_STOP_STEP_FACTOR);
+void ctx_zoom_smoothly(float* zoom_state, float target) {
+    *zoom_state = Lerp(
+        *zoom_state,
+        target,
+        ZOOM_SMOOTH_STEP * delta_time() * ZOOM_DELTATIME_FACTOR
+    );
+}
 
-    update_camera_from_zoom(&ctx->camera.fovy, ctx->zoom_state);
+void ctx_handle_zoom(ctx_t* ctx) {
+    static float smooth_zoom_state = 0;
+
+    if (is_input_zoom_in())
+        ctx_zoom_smoothly(&smooth_zoom_state, ZOOM_IN_TARGET);
+    else if (is_input_zoom_out())
+        ctx_zoom_smoothly(&smooth_zoom_state, ZOOM_OUT_TARGET);
+    else
+        ctx_zoom_smoothly(&smooth_zoom_state, ZOOM_STOP_TARGET);
+
+    update_camera_from_zoom(&ctx->camera.fovy, smooth_zoom_state);
 }
 
 void ctx_switch_weapon(ctx_t* ctx, int8_t switch_direction) {
@@ -164,7 +170,6 @@ void ctx_switch_weapon(ctx_t* ctx, int8_t switch_direction) {
         return;
 
     ctx->selected_weapon = r;
-    ctx->weapon_info_text_alpha = ORIGINAL_WEAPON_INFO_TEXT_ALPHA;
 }
 
 void ctx_handle_weapon_switch(ctx_t* ctx) {
@@ -174,21 +179,12 @@ void ctx_handle_weapon_switch(ctx_t* ctx) {
         ctx_switch_weapon(ctx, WEAPON_SWITCH_DIRECTION_NEXT);
 }
 
-void ctx_update_weapon_info_text(ctx_t* ctx) {
-    ctx->weapon_info_text_alpha = Lerp(
-        ctx->weapon_info_text_alpha,
-        0,
-        WEAPON_INFO_TEXT_FADING_STEP
-    );
-}
-
-void ctx_update(ctx_t* ctx, float delta_time) {
-    (void)delta_time;
-
-    ctx_update_weapon_info_text(ctx);
-
+void ctx_update(ctx_t* ctx) {
     ctx_handle_zoom(ctx);
     ctx_handle_weapon_switch(ctx);
+}
+
+void ctx_drawing_update(ctx_t* ctx) {
     ctx_draw_current_weapon(ctx);
 }
 
@@ -220,9 +216,9 @@ float measure_text_width(Font font, char const* buf) {
 }
 
 float calculate_zoom_percentage_from_fovy(float fovy) {
-    return  FROM_XRANGE_TO_YRANGE(
-        ZOOM_MAX - fovy + ZOOM_MIN + 1,
-        ZOOM_MIN + 1, ZOOM_MAX + 1,
+    return FROM_XRANGE_TO_YRANGE(
+        ZOOM_MAX - fovy + ZOOM_MIN,
+        ZOOM_MIN, ZOOM_MAX,
         0, 100
     );
 }
@@ -245,61 +241,65 @@ void ui_draw_zoom_percentage(Font font, float fovy) {
     );
 }
 
-void ui_draw_weapon_name(Color color, Font font, char const* name) {
-    float const font_size = UI_DEBUG_FONT_SIZE * 2;
-    Vector2 const text_size = MeasureTextEx(font, name, font_size, UI_DEBUG_FONT_SPACING);
-
-    DrawTextEx(
-        font,
-        name,
-        vec2(
-            SCREEN_W / 2 - text_size.x / 2,
-            SCREEN_H - UI_EDGE_OFFSET * 2 - text_size.y / 2
-        ),
-        font_size,
-        UI_DEBUG_FONT_SPACING,
-        color
-    );
-}
-
-void ui_draw_weapon_number(Color color, Font font, uint8_t weapon_index) {
+void ui_draw_weapon_number(
+    Font font,
+    uint8_t number
+) {
     char buf[UI_DEBUG_TEXT_MAX_LENGTH];
-    sprintf_s(buf, sizeof(buf), "%d of %d", weapon_index + 1, WEAPONS_COUNT);
+    sprintf_s(buf, sizeof(buf), "(%d of %d)", number, WEAPONS_COUNT);
+    Vector2 const text_size = MeasureTextEx(
+        font, buf, WEAPON_INFO_FONT_SIZE, UI_DEBUG_FONT_SPACING
+    );
 
     DrawTextEx(
         font,
         buf,
         vec2(
-            SCREEN_W / 2 - measure_text_width(font, buf) / 2,
-            UI_EDGE_OFFSET
+            SCREEN_W - UI_EDGE_OFFSET - text_size.x,
+            SCREEN_H - UI_EDGE_OFFSET - text_size.y
         ),
-        UI_DEBUG_FONT_SIZE,
+        WEAPON_INFO_FONT_SIZE,
         UI_DEBUG_FONT_SPACING,
-        color
+        GRAY
+    );
+}
+
+void ui_draw_weapon_name(Font font, char const* name) {
+    Vector2 const text_size = MeasureTextEx(
+        font, name, WEAPON_INFO_FONT_SIZE, UI_DEBUG_FONT_SPACING
+    );
+
+    DrawTextEx(
+        font,
+        name,
+        vec2(
+            UI_EDGE_OFFSET,
+            SCREEN_H - UI_EDGE_OFFSET - text_size.y
+        ),
+        WEAPON_INFO_FONT_SIZE,
+        UI_DEBUG_FONT_SPACING,
+        WEAPON_NAME_COLOR
     );
 }
 
 void ctx_draw_ui(ctx_t* ctx) {
     Font const font = ctx->font;
-    Color const weapon_info_text_color = color(
-        255, 255, 255,
-        ctx->weapon_info_text_alpha
-    );
 
     ui_draw_fps(font);
     ui_draw_zoom_percentage(font, ctx->camera.fovy);
-    ui_draw_weapon_name(weapon_info_text_color, font, ctx_cur_weapon_name(ctx));
-    ui_draw_weapon_number(weapon_info_text_color, font, ctx->selected_weapon);
+    ui_draw_weapon_name(font, ctx_cur_weapon_name(ctx));
+    ui_draw_weapon_number(font, ctx->selected_weapon + 1);
 }
 
-void ctx_internal_update(ctx_t* ctx, float delta_time) {
+void ctx_internal_update(ctx_t* ctx) {
     UpdateCamera(&ctx->camera, CAMERA_ORBITAL);
 
     BeginDrawing();
         clear_bg();
+        ctx_update(ctx);
 
         BeginMode3D(ctx->camera);
-            ctx_update(ctx, delta_time);
+            ctx_drawing_update(ctx);
         EndMode3D();
 
         ctx_draw_ui(ctx);
@@ -308,10 +308,8 @@ void ctx_internal_update(ctx_t* ctx, float delta_time) {
 
 void ctx_loop(ctx_t* ctx) {
     for (;;) {
-        float const delta_time = GetFrameTime();
-
         listen_for_exit(ctx);
-        ctx_internal_update(ctx, delta_time);
+        ctx_internal_update(ctx);
     }
 }
 
@@ -355,11 +353,6 @@ void init_ctx_weapons(ctx_t* ctx) {
         "Res/MultiPistol/BaseColor.png", "Res/MultiPistol/Model.obj",
         "MULTI PISTOL", 2
     );
-    init_ctx_weapon(
-        ctx, 2,
-        "Res/QuickShotgun/BaseColor.png", "Res/QuickShotgun/Model.obj",
-        "QUICK SHOTGUN", 0.7
-    );
 }
 
 void deinit_ctx_weapons(ctx_t* ctx) {
@@ -375,8 +368,7 @@ void init_ctx(ctx_t* ctx) {
     SetTextureFilter(ctx->font.texture, TEXTURE_FILTER_BILINEAR);
 
     init_ctx_weapons(ctx);
-    ctx->selected_weapon = 0;
-    ctx->weapon_info_text_alpha = ORIGINAL_WEAPON_INFO_TEXT_ALPHA;
+    ctx->selected_weapon = GetRandomValue(0, WEAPONS_COUNT - 1);
 
     ctx->camera = (Camera3D) {
         .position = vec3(-10, 15, -10),
@@ -385,8 +377,6 @@ void init_ctx(ctx_t* ctx) {
         .fovy = 45,
         .projection = CAMERA_PERSPECTIVE
     };
-
-    ctx->zoom_state = 0;
 }
 
 void deinit_ctx(ctx_t* ctx) {
