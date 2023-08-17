@@ -8,6 +8,7 @@ TODO:
 
 #include "Base.c"
 #include "RayLib.c"
+#include <stdint.h>
 
 #define SCREEN_W ((float)1200)
 #define SCREEN_H ((float)650)
@@ -32,7 +33,7 @@ TODO:
 #define UI_DEBUG_FONT_SPACING ((float)5)
 #define UI_DEBUG_TEXT_MAX_LENGTH ((int)40)
 
-#define WEAPONS_COUNT ((uint8_t)4)
+#define WEAPONS_COUNT ((uint8_t)3)
 #define WEAPON_SWITCH_DIRECTION_NEXT ((int8_t)+1)
 #define WEAPON_SWITCH_DIRECTION_PREVIOUS ((int8_t)-1)
 #define WEAPON_INFO_FONT_SIZE ((float)(UI_DEBUG_FONT_SIZE * 1.4))
@@ -251,45 +252,116 @@ void ui_draw_zoom_percentage(Font font, float fovy) {
     );
 }
 
-void ui_draw_weapon_number(
-    Font font,
-    uint8_t number
+void ui_draw_weapon_name_and_index(
+    Font font, char const* name, uint8_t index
 ) {
-    char buf[UI_DEBUG_TEXT_MAX_LENGTH];
-    sprintf_s(buf, sizeof(buf), "(%d of %d)", number, WEAPONS_COUNT);
-    Vector2 const text_size = MeasureTextEx(
-        font, buf, WEAPON_INFO_FONT_SIZE, UI_DEBUG_FONT_SPACING
-    );
-
-    DrawTextEx(
-        font,
-        buf,
-        vec2(
-            SCREEN_W - UI_EDGE_OFFSET - text_size.x,
-            SCREEN_H - UI_EDGE_OFFSET - text_size.y
-        ),
-        WEAPON_INFO_FONT_SIZE,
-        UI_DEBUG_FONT_SPACING,
-        GRAY
-    );
-}
-
-void ui_draw_weapon_name(Font font, char const* name) {
     Vector2 const text_size = MeasureTextEx(
         font, name, WEAPON_INFO_FONT_SIZE, UI_DEBUG_FONT_SPACING
     );
 
+    Vector2 const text_pos = vec2(
+        UI_EDGE_OFFSET,
+        SCREEN_H - UI_EDGE_OFFSET - text_size.y
+    );
+
+    // drawing the name of the weapon
     DrawTextEx(
         font,
         name,
-        vec2(
-            UI_EDGE_OFFSET,
-            SCREEN_H - UI_EDGE_OFFSET - text_size.y
-        ),
+        text_pos,
         WEAPON_INFO_FONT_SIZE,
         UI_DEBUG_FONT_SPACING,
         WEAPON_NAME_COLOR
     );
+
+    // drawing the little squares
+    // indicating which weapon is selected (based on the index).
+    // we draw an empty square for unselected weapon
+    // and a full one for the selected one
+    for (uint8_t i = 0; i < WEAPONS_COUNT; i++) {
+        uint8_t const offset_between_squares = 8;
+        Vector2 const size = scalar_to_vec2(13);
+        Vector2 const pos = vec2(
+            UI_EDGE_OFFSET + size.x*i + offset_between_squares*i,
+            SCREEN_H - UI_EDGE_OFFSET + 5
+        );
+
+        if (i == index)
+            DrawRectangleV(pos, size, WHITE);
+        else
+            DrawRectangleLinesEx(
+                rect(pos, size),
+                1,
+                WHITE
+            );
+    }
+}
+
+bool is_mouse_over_rect(Rectangle r) {
+    return CheckCollisionPointRec(
+        GetMousePosition(),
+        r
+    );
+}
+
+// draw the continue button and
+// checks whether it's clicked.
+// the function also checks for
+// mouse hover and highlight the button
+// whether it is
+bool ui_handle_continue_button(Font font) {
+    char const* text = "continue";
+    float const font_size = 22;
+    float const font_spacing = 1;
+
+    Vector2 const text_size = MeasureTextEx(
+        font, text, font_size, font_spacing
+    );
+
+    Vector2 const text_pos = vec2(
+        SCREEN_W - UI_EDGE_OFFSET - text_size.x - 12,
+        SCREEN_H - UI_EDGE_OFFSET - text_size.y - 12
+    );
+
+    Vector2 const button_pos = vec2(
+        text_pos.x - 14,
+        text_pos.y - 5
+    );
+
+    Vector2 const button_size = vec2(
+        SCREEN_W - UI_EDGE_OFFSET - button_pos.x,
+        text_size.y + 10
+    );
+
+    Rectangle const button_rect = rect(button_pos, button_size);
+    bool const is_mouse_over = is_mouse_over_rect(button_rect);
+
+    // drawing the button
+    if (is_mouse_over)
+        DrawRectangleV(
+            button_pos, button_size,
+            WHITE
+        );
+    else
+        DrawRectangleLinesEx(
+            button_rect,
+            1,
+            WHITE
+        );
+
+    // drawing the button's caption
+    DrawTextEx(
+        font,
+        text,
+        text_pos,
+        font_size,
+        font_spacing,
+        is_mouse_over ? BLACK : WHITE
+    );
+
+    return
+        is_mouse_over &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
 void ctx_draw_ui(ctx_t* ctx) {
@@ -297,8 +369,13 @@ void ctx_draw_ui(ctx_t* ctx) {
 
     ui_draw_fps(font);
     ui_draw_zoom_percentage(font, ctx->camera.fovy);
-    ui_draw_weapon_name(font, ctx_cur_weapon_name(ctx));
-    ui_draw_weapon_number(font, ctx->selected_weapon + 1);
+    ui_draw_weapon_name_and_index(
+        font,
+        ctx_cur_weapon_name(ctx),
+        ctx->selected_weapon
+    );
+    bool const is_continue_button_clicked = ui_handle_continue_button(font);
+    (void)is_continue_button_clicked;
 }
 
 void ctx_internal_update(ctx_t* ctx) {
@@ -361,24 +438,38 @@ void init_ctx_weapon_no_texture(
 void init_ctx_weapon(
     ctx_t* ctx,
     uint8_t weapon_index,
-    char const* texture_path,
+    char const* base_color_path,
+    char const* normal_path,
+    char const* roughness_path,
+    char const* emissive_path,
     char const* model_path,
     char const* name,
     float scale
 ) {
-    // loading model
+    // loading base model
     init_ctx_weapon_no_texture(ctx, weapon_index, model_path, name, scale);
     
-    // loading texture + setting texture
-    Texture2D const weapon_texture = LoadTexture(texture_path);
-    ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = weapon_texture;
+    // loading texture base color
+    ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture =
+        LoadTexture(base_color_path);
+
+    // loading texture normal
+    if (normal_path != NULL)
+        ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_NORMAL].texture =
+            LoadTexture(normal_path);
+
+    // loading texture roughness
+    if (roughness_path != NULL)
+        ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_ROUGHNESS].texture =
+            LoadTexture(roughness_path);
+
+    // loading texture emissive
+    if (emissive_path != NULL)
+        ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_EMISSION].texture =
+            LoadTexture(emissive_path);
 }
 
 void deinit_ctx_weapon(ctx_t* ctx, uint8_t weapon_index) {
-    // unloading texture
-    UnloadTexture(
-        ctx->weapons.models[weapon_index].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture
-    );
     // unloading model
     UnloadModel(ctx->weapons.models[weapon_index]);
 }
@@ -386,25 +477,30 @@ void deinit_ctx_weapon(ctx_t* ctx, uint8_t weapon_index) {
 void init_ctx_weapons(ctx_t* ctx) {
     init_ctx_weapon(
         ctx, 0,
-        "Res/Pistol/BaseColor.png", "Res/Pistol/Model.obj",
+        "Res/Pistol/BaseColor.png",
+        "Res/Pistol/Normal.png",
+        "Res/Pistol/Roughness.png",
+        NULL,
+        "Res/Pistol/Model.obj",
         "PISTOL", 1
     );
     init_ctx_weapon(
         ctx, 1,
-        "Res/MultiPistol/BaseColor.png", "Res/MultiPistol/Model.obj",
-        "MULTI PISTOL", 2
+        "Res/MachineGun/BaseColor.png",
+        "Res/MachineGun/Normal.png",
+        "Res/MachineGun/Roughness.png",
+        NULL,
+        "Res/MachineGun/Model.obj",
+        "MACHINE GUN", 2
     );
     init_ctx_weapon(
         ctx, 2,
         "Res/Rifle/BaseColor0.png",
+        NULL,
+        NULL,
+        "Res/Rifle/Emissive.png",
         "Res/Rifle/Model.obj",
         "RIFLE", 0.7
-    );
-    init_ctx_weapon(
-        ctx, 3,
-        "Res/Sniper/BaseColor.png",
-        "Res/Sniper/Model.obj",
-        "SNIPER", 0.1
     );
 }
 
@@ -422,7 +518,7 @@ void init_ctx(ctx_t* ctx) {
     SetTextureFilter(ctx->font.texture, TEXTURE_FILTER_BILINEAR);
 
     ctx->screen_shader_target = LoadRenderTexture(SCREEN_W, SCREEN_H);
-    ctx->shader = LoadShader(NULL, "Res/Shaders/Bloom.fs");
+    ctx->shader = LoadShader(NULL, "Res/Shaders/Normal.fs");
 
     init_ctx_weapons(ctx);
     ctx->selected_weapon = GetRandomValue(0, WEAPONS_COUNT - 1);
